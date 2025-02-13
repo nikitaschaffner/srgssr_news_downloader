@@ -16,6 +16,7 @@ class app():
         self.api_url        = str
         self.business_unit  = str
         self.show           = str
+        self.response_content = {}
 
         self.config_file    = "config.ini"
         self.config         = configparser.ConfigParser()
@@ -64,17 +65,29 @@ class app():
             raise ValueError("Business unit not defined. Must be srf, rts or rsi")
         
         request_url = self.api_url.format(bu=self.business_unit)
-
         headers = {
-            "Authentication": self.oauth_token
+            "Authorization": f"Bearer {self.oauth_token}",
+            "Content-Type": "application/json"
         }
 
         response = requests.get(request_url, headers=headers)
-        print(response.text)
+        self.response_content = response.json()
 
 
     def download_news_audio(self):
-        pass
+        if not "podcasts" in self.response_content:
+            raise RuntimeError("No content returned by api.")
+        
+        podcast = self.response_content["podcasts"]
+        mp3 = requests.get(podcast[0]["podcastHdUrl"], stream=True)
+
+        if not mp3.status_code == 200:
+            raise RuntimeError("No mp3 downloaded by api")
+        
+        save_path = "news.mp3"
+        with open(save_path, "wb") as file:
+            for chunk in mp3.iter_content(chunk_size=1024):
+                file.write(chunk)
 
 
 if __name__ == "__main__":
