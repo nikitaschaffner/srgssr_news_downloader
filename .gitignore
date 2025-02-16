@@ -1,7 +1,10 @@
 # Custom
 config.ini
+srgssr_news_downloader/config.ini
 test/
 news.mp3
+output_log.txt
+output_log_old.txt
 
 # Template:
 
