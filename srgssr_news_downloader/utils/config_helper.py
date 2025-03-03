@@ -27,10 +27,10 @@ class ConfigHelper():
         Args:
             filename (str): Name of configuration file. Default "config.ini".
         """
-        self.config = configparser.ConfigParser()
+        self._config = configparser.ConfigParser()
         self.filename = filename
 
-    def load_config(self) -> configparser.ConfigParser:
+    def load_config(self) -> None:
         """
         Load existing configuration file.
         
@@ -43,10 +43,9 @@ class ConfigHelper():
         if not os.path.exists(self.filename):
             raise FileNotFoundError(f"Configuration file '{self.filename}' not found.")
         
-        self.config.read(self.filename)
-        return self.config
+        self._config.read(self.filename)
 
-    def create_config(self) -> configparser.ConfigParser:
+    def create_config(self) -> None:
         """
         Create new config file with default values.
         
@@ -54,11 +53,9 @@ class ConfigHelper():
             configparser.ConfigParser: The created configuration object.
         """
         # Read default values into config object and write new config file
-        self.config.read_dict(default_config)
+        self._config.read_dict(default_config)
         with open(self.filename, "w") as f:
-            self.config.write(f)
-
-        return self.config
+            self._config.write(f)
     
     def get_value(self, section: str, key: str) -> str:
         """
@@ -75,31 +72,30 @@ class ConfigHelper():
             KeyError: If section or key do not exist.
         """
         try:
-            self.config[section]
+            self._config[section]
         except KeyError:
             raise KeyError(f"Section '{section}' not found in configuration")
         
         try:
-            return self.config[section][key]
+            return self._config[section][key]
         except KeyError:
             raise KeyError(f"Key '{key}' not found in section '{section}' in configuration")
         
     def set_value(self, section: str, key: str, value: str) -> None:
-        """
-        Set a value in the configuration and save it in the config file.
+        """Set a value in the configuration and save it in the config file.
 
         Args:
             section (str): The configuration section (f.ex. "auth")
             key (str): The key in the section (f.ex. "auth_url")
             value (str): The value to set.
         """
-        if section not in self.config:
-            self.config[section] = {}
-        self.config[section][key] = value
+        if section not in self._config:
+            self._config[section] = {}
+        self._config[section][key] = value
 
         # Overwrite config file
         with open(self.filename, "w") as f:
-            self.config.write(f)
+            self._config.write(f)
 
     def validate_config(self) -> bool:
         """Validate if the config file by comparing it to default values.
@@ -111,12 +107,12 @@ class ConfigHelper():
             bool: Returns True if config file is valid.
         """
         for section, keys in default_config.items():
-            if section not in self.config:
-                raise KeyError("Missing section '{section}' in '{self.filename}'.")
+            if section not in self._config:
+                raise KeyError(f"Missing section '{section}' in '{self.filename}'.")
             
             for key, value in keys.items():
-                if key not in self.config[section]:
-                    raise KeyError("Missing key '{key}' in '{self.filename}'.")
+                if key not in self._config[section]:
+                    raise KeyError(f"Missing key '{key}' in '{self.filename}'.")
                     
         return True
                 
