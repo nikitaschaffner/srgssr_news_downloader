@@ -4,7 +4,7 @@ import os
 default_config: dict[str, dict[str, str]] = {
     "auth": {
         "auth_url" : "https://api.srgssr.ch/oauth/v1/accesstoken?grant_type=client_credentials", # Set 16.02.2025, from SRGSSR Dev Portal
-        "cliend_id": "",        # From SRGSSR Dev Portal
+        "client_id": "",        # From SRGSSR Dev Portal
         "client_secret": ""     # From SRGSSR Dev Portal
     },
     "api": {
