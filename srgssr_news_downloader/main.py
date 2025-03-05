@@ -79,6 +79,10 @@ class Window(QtWidgets.QMainWindow):
         if r:
             self.log.info("New configuration saved by user.")
             # Restart API Worker
+            try:
+                self.api_thread.stop()
+            except Exception:
+                pass
             self.start_api_worker()
 
     def info_menu_clicked(self) -> None:

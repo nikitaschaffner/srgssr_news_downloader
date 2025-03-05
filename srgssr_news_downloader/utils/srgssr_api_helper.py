@@ -1,10 +1,12 @@
+from requests.auth import HTTPBasicAuth
 from PyQt6.QtCore import QThread, pyqtSignal as Signal, QObject
+from datetime import datetime
+import logging
 import os
 import requests
-import logging
 import time
 import validators
-from requests.auth import HTTPBasicAuth
+
 
 
 class APIWorker(QObject):
@@ -46,6 +48,9 @@ class APIWorker(QObject):
         self.savepath           = str
 
         self.response_content   = {}
+
+        self.datetime_format = "%Y-%m-%dT%H:%M:%S%z"
+        self.last_download_datetime_obj = datetime.strptime("0001-01-01T00:00:00+01:00", self.datetime_format)
 
         try:
             self.populate_config_data()
@@ -188,16 +193,16 @@ class APIWorker(QObject):
         self.log.debug(self.response_content)
 
     def download(self):
-        if not "podcasts" in self.response_content:
-            raise RuntimeError("No content returned by api.")
-        
-        podcast = self.response_content["podcasts"]
-        mp3 = requests.get(podcast[0]["podcastHdUrl"], stream=True)
+        mp3 = requests.get(self.latest_file_dict["podcastHdUrl"], stream=True)
 
         if not mp3.status_code == 200:
-            raise RuntimeError("No mp3 downloaded by api")
+            self.log.error(f"API: Error while trying to download latest audio file. Status -> {mp3.status_code}")
+            self.log.error(mp3.text)
+            raise RuntimeError()
         
         self.savepath_w_ext = f"{self.savepath}.mp3"
+        self.log.debug("API: Download succesful. Writing file.")
+        self.log.debug(f"API: Saving as {self.savepath_w_ext}")
         try:
             with open(self.savepath_w_ext, "wb") as file:
                 for chunk in mp3.iter_content(chunk_size=1024):
@@ -205,13 +210,14 @@ class APIWorker(QObject):
         except Exception as ex:
             raise ex
         finally:
+            self.log.info("API: New audiofile has been saved.")
+            self.last_download_datetime_obj = datetime.strptime(self.latest_file_dict["date"], self.datetime_format)
             self.response_content = {}
     
     def run(self):
         
         api_update_count = 0
         force_update = True
-        last_download_date = "-"
         self.oauth_token = ""
 
         try:
@@ -250,7 +256,7 @@ class APIWorker(QObject):
                 if not self.oauth_token:
                     try:
                         self.connection_status.emit({"status_label": {"text": "API Token wird angefordert..."},
-                                                     "download_label": {"text": f"{last_download_date}"}})
+                                                     "download_label": {"text": f"{self.last_download_datetime_obj}"}})
                         self.log.debug("Getting new oAuth token.")
                         self.get_auth_token()
                         self.log.debug(f"Received new oAuth token: {self.oauth_token}")
@@ -260,7 +266,7 @@ class APIWorker(QObject):
                     except KeyError:
                         self.oauth_token = ""
                         self.connection_status.emit({"status_label": {"text": "Warten auf oAuth Token.", "color": "orange"},
-                                                     "download_label": {"text": f"{last_download_date}"}})
+                                                     "download_label": {"text": f"{self.last_download_datetime_obj}"}})
                     except requests.exceptions.ConnectionTimeout:
                         self.oauth_token = ""
                         self.connection_status.emit({"status_label": {"text": f"Verbindungsfehler zu oAuth Server. Neuversuch in {self.update_cycle}s", "color": "orange"},
@@ -270,7 +276,7 @@ class APIWorker(QObject):
                 if self.oauth_token and self.running:
                     self.log.debug("API: Fetching news data.")
                     self.connection_status.emit({"status_label": {"text": "News Daten werden angefordert..."},
-                                                 "download_label": {"text": f"{last_download_date}"}})
+                                                 "download_label": {"text": f"{self.last_download_datetime_obj}"}})
                     try:
                         self.get_news_data()
                     except RuntimeError:
@@ -282,22 +288,30 @@ class APIWorker(QObject):
                         self.response_content = {}
                         self.connection_status.emit({"status_label": {"text": f"Verbindungsfehler zu API Server. Neuversuch in {self.update_cycle}s", "color": "orange"},
                                                     "download_label": {"text": "Gegebenfalls Konfiguration überprüfen."}})
-                        
-
-                # TODO: Setup Date check for new content. Make content check too before download.
-
+                    
                 # Download routine, run when we have new content from news fetch
-                if self.response_content and self.running:
-                    self.log.debug("API: Download news file.")
-                    self.connection_status.emit({"status_label": {"text": "Download Audiofile..."}, "download_label": {"text": f"{last_download_date}"}})
-                    try:
-                        self.download()
-                    except RuntimeError:
-                        pass
-
-
-
-
+                if self.response_content:
+                    # Content check before Download
+                    if "podcasts" in self.response_content and self.running: 
+                        self.latest_file_dict = self.response_content["podcasts"][0]
+                        if datetime.strptime(self.latest_file_dict["date"], self.datetime_format) > self.last_download_datetime_obj:
+                            self.log.info("API: Download news file.")
+                            self.connection_status.emit({"status_label": {"text": "Download Audiofile..."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                            try:
+                                self.download()
+                                # Success !
+                                self.connection_status.emit({"status_label": {"text": "Programm läuft ohne Fehler."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                            except RuntimeError:
+                                self.connection_status.emit({"status_label": {"text": f"Download Error. Neuversuch in {self.update_cycle}s", "color": "red"},
+                                                        "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                                self.response_content = {}
+                        else:
+                            self.connection_status.emit({"status_label": {"text": "Programm läuft ohne Fehler."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                    else:
+                        self.log.error("API: No Podcast data was received from API response.")
+                        self.connection_status.emit({"status_label": {"text": "Keine Podcast Daten von API erhalten.", "color": "orange"},
+                                                    "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                        self.response_content = {}
 
                 api_update_count = 0
             
