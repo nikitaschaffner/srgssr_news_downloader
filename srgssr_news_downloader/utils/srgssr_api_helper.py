@@ -7,8 +7,6 @@ import requests
 import time
 import validators
 
-
-
 class APIWorker(QObject):
     # Communication signals
     connection_status = Signal(dict)
@@ -267,10 +265,15 @@ class APIWorker(QObject):
                         self.oauth_token = ""
                         self.connection_status.emit({"status_label": {"text": "Warten auf oAuth Token.", "color": "orange"},
                                                      "download_label": {"text": f"{self.last_download_datetime_obj}"}})
-                    except requests.exceptions.ConnectionTimeout:
+                    except requests.exceptions.ConnectTimeout:
                         self.oauth_token = ""
                         self.connection_status.emit({"status_label": {"text": f"Verbindungsfehler zu oAuth Server. Neuversuch in {self.update_cycle}s", "color": "orange"},
                                                     "download_label": {"text": "Gegebenfalls Konfiguration überprüfen."}})
+                    except Exception as ex:
+                        self.oauth_token = ""
+                        self.connection_status.emit({"status_label": {"text": "Ein unbekannter Fehler ist aufgetreten", "color": "red"},
+                                                     "download_label": {"text": "Bitte Log Datei überprüfen und Fehler melden."}})
+                        self.error.emit(ex)
 
                 # News Fetch routine, run when we have oAuth token
                 if self.oauth_token and self.running:
@@ -284,29 +287,44 @@ class APIWorker(QObject):
                             self.response_content = {} # Empty response content to skip download
                             self.oauth_token = "" # Empty token to force getting new token
                             force_update = True # Force start the next cycle
-                    except requests.exceptions.ConnectionTimeout:
+                    except requests.exceptions.ConnectionError:
                         self.response_content = {}
                         self.connection_status.emit({"status_label": {"text": f"Verbindungsfehler zu API Server. Neuversuch in {self.update_cycle}s", "color": "orange"},
                                                     "download_label": {"text": "Gegebenfalls Konfiguration überprüfen."}})
+                    except Exception as ex:
+                        self.connection_status.emit({"status_label": {"text": "Ein unbekannter Fehler ist aufgetreten", "color": "red"},
+                                                     "download_label": {"text": "Bitte Log Datei überprüfen und Fehler melden."}})
+                        self.error.emit(ex)
                     
                 # Download routine, run when we have new content from news fetch
                 if self.response_content:
                     # Content check before Download
                     if "podcasts" in self.response_content and self.running: 
-                        self.latest_file_dict = self.response_content["podcasts"][0]
-                        if datetime.strptime(self.latest_file_dict["date"], self.datetime_format) > self.last_download_datetime_obj:
-                            self.log.info("API: Download news file.")
-                            self.connection_status.emit({"status_label": {"text": "Download Audiofile..."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
-                            try:
-                                self.download()
-                                # Success !
+                        try:
+                            self.latest_file_dict = self.response_content["podcasts"][0]
+                            if datetime.strptime(self.latest_file_dict["date"], self.datetime_format) > self.last_download_datetime_obj:
+                                self.log.info("API: Download news file.")
+                                self.connection_status.emit({"status_label": {"text": "Download Audiofile..."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                                try:
+                                    self.download()
+                                    # Success !
+                                    self.connection_status.emit({"status_label": {"text": "Programm läuft ohne Fehler."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                                except RuntimeError:
+                                    self.connection_status.emit({"status_label": {"text": f"Download Error. Neuversuch in {self.update_cycle}s", "color": "red"},
+                                                            "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                                    self.response_content = {}
+                                except Exception as ex:
+                                    self.connection_status.emit({"status_label": {"text": "Ein unbekannter Fehler ist aufgetreten", "color": "red"},
+                                                                "download_label": {"text": "Bitte Log Datei überprüfen und Fehler melden."}})
+                                    self.response_content = {}
+                                    self.error.emit(ex)
+                            else:
                                 self.connection_status.emit({"status_label": {"text": "Programm läuft ohne Fehler."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
-                            except RuntimeError:
-                                self.connection_status.emit({"status_label": {"text": f"Download Error. Neuversuch in {self.update_cycle}s", "color": "red"},
-                                                        "download_label": {"text": f"{self.last_download_datetime_obj}"}})
-                                self.response_content = {}
-                        else:
-                            self.connection_status.emit({"status_label": {"text": "Programm läuft ohne Fehler."}, "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                        except IndexError:
+                            self.log.info("API: No News data in received podcast data. Normal if it's after midnight.")
+                            self.connection_status.emit({"status_label": {"text": "Keine News Daten verfügbar", "color": "orange"},
+                                                    "download_label": {"text": f"{self.last_download_datetime_obj}"}})
+                            self.response_content = {}
                     else:
                         self.log.error("API: No Podcast data was received from API response.")
                         self.connection_status.emit({"status_label": {"text": "Keine Podcast Daten von API erhalten.", "color": "orange"},
