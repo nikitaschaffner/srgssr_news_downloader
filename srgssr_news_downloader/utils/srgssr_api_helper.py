@@ -32,6 +32,8 @@ class APIWorker(QObject):
         from utils.logging_setup import logger  
         self.log = logging.getLogger("news_downloader")
 
+        self.config_helper = config_helper
+
         self.oauth_url          = str
         self.oauth_token        = str
         self.client_id          = str
