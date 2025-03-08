@@ -13,7 +13,7 @@ default_config: dict[str, dict[str, str]] = {
         "update_cycle":"60"         # In seconds
     },
     "audio_file": {
-        "filename": "news",
+        "filename": "{bu}_news",
         "filepath": ""
     }
 }

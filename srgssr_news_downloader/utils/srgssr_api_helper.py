@@ -67,13 +67,19 @@ class APIWorker(QObject):
         self.client_id          = config_get("auth", "client_id")
         self.client_secret      = config_get("auth", "client_secret")
 
-        self.api_url            = config_get("api", "api_url") # Will be reformated in test_configuration()
+        self.api_url            = config_get("api", "api_url")
         self.business_unit      = config_get("api", "business_unit")
         self.update_cycle       = int(config_get("api", "update_cycle"))
 
         self.filepath           = config_get("audio_file", "filepath")
         self.filename           = config_get("audio_file", "filename")
         self.savepath           = f"{self.filepath}/{self.filename}"
+
+        # Reformat
+        self.api_url            = self.api_url.format(bu=self.business_unit)
+        self.savepath           = self.savepath.format(bu=self.business_unit)
+        print(self.api_url)
+        print(self.savepath)
 
     def test_configuration(self):
         """Testing and validating the configurations.
@@ -90,9 +96,6 @@ class APIWorker(QObject):
         # Check if Business Unit is correct
         if not self.business_unit in ("srf", "rts", "rsi"):
             raise KeyError("Business Unit in Konfiguration fehlerhaft.")
-        
-        # Reformat to final url with business unit
-        self.api_url = self.api_url.format(bu=self.business_unit) 
         
         # Test OAuth URL
         self.log.info(f"Validating: {self.oauth_url}")
