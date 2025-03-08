@@ -222,6 +222,12 @@ class configWindow(QDialog):
 
         form_layout = QFormLayout()
 
+        # URL's
+        self.auth_url_input = QLineEdit(self.config_helper.get_value("auth", "auth_url"))
+        self.api_url_input = QLineEdit(self.config_helper.get_value("api", "api_url"))
+        form_layout.addRow("Auth API URL:", self.auth_url_input)
+        form_layout.addRow("API URL:", self.api_url_input)
+
         # Auth section
         self.client_id_input = QLineEdit(self.config_helper.get_value("auth", "client_id"))
         self.client_secret_input = QLineEdit(self.config_helper.get_value("auth", "client_secret"))
@@ -264,7 +270,7 @@ class configWindow(QDialog):
 
     def save_settings(self):
         # Update and save the config
-        self.config_helper.set_value("auth", "cliend_id", self.client_id_input.text())
+        self.config_helper.set_value("auth", "client_id", self.client_id_input.text())
         self.config_helper.set_value("auth", "client_secret", self.client_secret_input.text())
         self.config_helper.set_value("api", "business_unit", self.business_unit_input.currentText())
         self.config_helper.set_value("api", "update_cycle", self.update_cycle_input.text())
