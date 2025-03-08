@@ -23,10 +23,12 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
+from version import __version__
 from utils.config_helper import ConfigHelper
 from utils.srgssr_api_helper import APIThread
 
 main_window_ui_file = "srgssr_news_downloader/res/main_window.ui"
+icon_file = "srgssr_news_downloader/res/icon.ico"
 config_window_ui_file = ""
 config_file_name = "config.ini"
 
@@ -37,6 +39,7 @@ class Window(QtWidgets.QMainWindow):
         ## GUI Setup
         uic.loadUi(main_window_ui_file, self)
         self.setWindowTitle("SRGSSR News Downloader")
+        
 
         # MenuBar Setup
         self.configMenu = QtGui.QAction("Konfiguration", self)
@@ -84,7 +87,9 @@ class Window(QtWidgets.QMainWindow):
             self.start_api_worker()
 
     def info_menu_clicked(self) -> None:
-        print("info")
+        dlg = infoWindow(self)
+        dlg.show()
+
 
     ## GUI / API Worker Signals
     def update_status_labels(self, label_dict: dict):
@@ -271,9 +276,24 @@ class configWindow(QDialog):
         self.accept()
 
 
-class infoWindow(QDialog):
-    def __init__(self, parent = QtWidgets.QMainWindow):
+class infoWindow(QMessageBox):
+    def __init__(self, parent: QtWidgets.QMainWindow):
+        """_summary_
+
+        Args:
+            parent (QtWidgets.QMainWindow): Main Window object.
+        """
         super().__init__(parent)
+        self.setIcon(QMessageBox.Icon.Information)
+        self.setWindowFilePath("App Information")
+        self.setText(
+            "SRGSSR News Downloader"
+            "\n\nAuthor: Nikita Schaffner for Radio4TNG"
+            f"\nVersion: {__version__}"
+            "\nMIT License"
+        )
+
+        self.exec()
 
 
 class ErrorDialog(QDialog):
@@ -308,9 +328,9 @@ class ErrorDialog(QDialog):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setWindowIcon(QtGui.QIcon(icon_file))
 
     ## Setup Logging
-    # Import logger only after old log was replaced! Otherwise we get a permission error.
     from utils.logging_setup import logger  
     log = logging.getLogger("news_downloader")
     log.info("---   New Session started")
