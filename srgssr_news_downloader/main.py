@@ -39,6 +39,7 @@ class Window(QtWidgets.QMainWindow):
         
         ## GUI Setup
         uic.loadUi(main_window_ui_file, self)
+        self.setWindowTitle("SRGSSR News Downloader")
 
         # MenuBar Setup
         self.configMenu = QtGui.QAction("Konfiguration", self)
@@ -273,7 +274,6 @@ class configWindow(QDialog):
         self.accept()
 
 
-
 class infoWindow(QDialog):
     def __init__(self, parent = QtWidgets.QMainWindow):
         super().__init__(parent)
@@ -309,27 +309,8 @@ class ErrorDialog(QDialog):
         self.exec()
 
 
-def replace_log() -> None:
-    """ If a log file of an older session still exists, rename last sessions log file to "_old".
-    Oldest log file gets deleted.
-    """
-    log_file = "output_log.txt"
-    old_log_file = "output_log_old.txt"
-    if os.path.exists(old_log_file): # Delete oldest log file
-        os.remove(old_log_file)
-    if os.path.exists(log_file): # Rename log file of the last session
-        os.rename(log_file, old_log_file)
-
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-
-    # Rename old log files. Save exception, so we can write it to new log.
-    replacement_exception = None
-    try:
-        replace_log()
-    except Exception as ex:
-        replacement_exception = ex
 
     ## Setup Logging
     # Import logger only after old log was replaced! Otherwise we get a permission error.
@@ -337,12 +318,7 @@ if __name__ == "__main__":
     log = logging.getLogger("news_downloader")
     log.info("---   New Session started")
 
-    # If logging replacement failed before, we will log that now.
-    if replacement_exception: 
-        ErrorDialog(replacement_exception).exec()
-        log.error(f"Error occured when replacing logs: {repr(replacement_exception)}")
-
-
+    ## Setup App and window
     window = Window()
     window.show()
     app.exec()

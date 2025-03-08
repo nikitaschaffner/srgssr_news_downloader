@@ -1,4 +1,5 @@
 import logging
+import logging.handlers
 import sys
 
 def setup_logger() -> object:
@@ -8,8 +9,11 @@ def setup_logger() -> object:
         logger Object
     """
     logger = logging.getLogger("news_downloader")
-    fh = logging.FileHandler("output_log.txt")
-    ch = logging.StreamHandler()
+    fh = logging.handlers.TimedRotatingFileHandler(
+        filename = "output_log.txt",
+        backupCount = 7,
+        when = "midnight")
+    ch = logging.StreamHandler() # For console logging
 
     level = logging.INFO
     if "--DEBUG" in sys.argv: 
