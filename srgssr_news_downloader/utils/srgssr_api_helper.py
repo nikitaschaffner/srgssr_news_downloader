@@ -1,11 +1,13 @@
-from requests.auth import HTTPBasicAuth
-from PyQt6.QtCore import QThread, pyqtSignal as Signal, QObject
-from datetime import datetime
 import logging
 import os
-import requests
 import time
+from datetime import datetime
+
+import requests
 import validators
+from PyQt6.QtCore import QObject, QThread
+from PyQt6.QtCore import pyqtSignal as Signal
+from requests.auth import HTTPBasicAuth
 
 
 class APIWorker(QObject):

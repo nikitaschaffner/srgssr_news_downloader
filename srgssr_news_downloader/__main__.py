@@ -2,26 +2,25 @@ import logging
 import os
 import sys
 
-from PyQt6 import QtWidgets, QtGui, uic
-
+from PyQt6 import QtGui, QtWidgets, uic
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QVBoxLayout,
+    QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
-    QFileDialog,
-    QFormLayout,
     QMessageBox,
+    QPushButton,
+    QVBoxLayout,
 )
 
-from srgssr_news_downloader.version import __version__
 from srgssr_news_downloader.utils.config_helper import ConfigHelper
 from srgssr_news_downloader.utils.srgssr_api_helper import APIThread
+from srgssr_news_downloader.version import __version__
 
 main_window_ui_file = "srgssr_news_downloader/gui/main_window.ui"
 icon_file = "srgssr_news_downloader/res/icon.ico"
@@ -367,7 +366,6 @@ if __name__ == "__main__":
     app.setWindowIcon(QtGui.QIcon(icon_file))
 
     ## Setup Logging
-
     log = logging.getLogger("news_downloader")
     log.info("---   New Session started")
 

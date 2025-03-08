@@ -1,4 +1,5 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
 from srgssr_news_downloader import __version__
 
 with open("LICENSE") as f:
