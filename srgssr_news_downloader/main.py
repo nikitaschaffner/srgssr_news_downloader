@@ -1,10 +1,8 @@
 import logging
 import os
 import sys
-import traceback
 
 from PyQt6 import (
-    QtCore,
     QtWidgets,
     QtGui,
     uic
@@ -31,7 +29,6 @@ from utils.srgssr_api_helper import APIThread
 main_window_ui_file = "srgssr_news_downloader/res/main_window.ui"
 config_window_ui_file = ""
 config_file_name = "config.ini"
-
 
 class Window(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
