@@ -9,8 +9,10 @@ from PyQt6.QtCore import QObject, QThread
 from PyQt6.QtCore import pyqtSignal as Signal
 from requests.auth import HTTPBasicAuth
 
+from srgssr_news_downloader.utils.config_helper import ConfigHelper
 
-class APIWorker(QObject):
+
+class APIWorker(QObject):  # QObject allows integration with the UI.
     # Communication signals
     connection_status = Signal(dict)
     error = Signal(object)
@@ -30,25 +32,25 @@ class APIWorker(QObject):
     error (object): Exception Object, only called in uncaught exceptions
     """
 
-    def __init__(self, config_helper=object):
+    def __init__(self, config_helper:ConfigHelper ):
         super().__init__()
 
         self.log = logging.getLogger("news_downloader")
 
         self.config_helper = config_helper
 
-        self.oauth_url = str
-        self.oauth_token = str
-        self.client_id = str
-        self.client_secret = str
+        self.oauth_url: str
+        self.oauth_token: str
+        self.client_id: str
+        self.client_secret: str
 
-        self.api_url = str
-        self.business_unit = str
-        self.update_cycle = int
+        self.api_url: str
+        self.business_unit: str
+        self.update_cycle: int
 
-        self.filepath = str
-        self.filename = str
-        self.savepath = str
+        self.filepath: str
+        self.filename: str
+        self.savepath: str
 
         self.response_content = {}
 
@@ -200,6 +202,9 @@ class APIWorker(QObject):
             self.log.error(f"oAuth API: Server Response -> {response.text}")
             raise KeyError()
 
+    def has_fetched_data(self):
+        return self.response_content is not None
+
     def get_news_data(self):
         """Fetch News data from SRG API and save data in variable.
 
@@ -245,10 +250,258 @@ class APIWorker(QObject):
             self.response_content = {}
 
     def run(self):
-        api_update_count = 0
-        force_update = True
+        api_update_count: int = 0
+        self.force_update = True
         self.oauth_token = ""
 
+        self.validate_configuration()
+
+        while self.running:
+            if self.force_update:
+                api_update_count = (
+                    self.update_cycle
+                )  # Update the count to force start the cycle
+                self.force_update = False
+
+            if api_update_count >= self.update_cycle and self.running:
+                self.log.debug("New cycle in worker routine starts.")
+
+                self.runtime_cycle()
+
+                api_update_count = 0
+
+            if self.running:
+                api_update_count += 1
+                time.sleep(1)
+
+        self.log.info("API Worker finished work.")
+        self.connection_status.emit(
+            {
+                "status_label": {"text": "API Worker stopped.", "color": "red"},
+                "download_label": {
+                    "text": "Konfiguration öffnen und speichern für neustart.",
+                    "color": "red",
+                },
+            }
+        )
+
+    def is_connected(self):
+        return self.oauth_token is not None
+
+    def is_running(self):
+        return self.running
+
+    def runtime_cycle(self):
+        # oAuth Routine, run when we have no token
+        if not self.is_connected():
+            self.log.debug("API: connect to api")
+            self.connect_to_api()
+
+        # News Fetch routine, run when we have oAuth token
+        if self.is_connected() and self.is_running():
+            self.log.debug("API: Fetching news data.")
+            self.fetch_api_data()
+
+        # Download routine, run when we have new content from news fetch
+        is_there_data_available = self.response_content is not None
+        if is_there_data_available:
+            # Content check before Download
+            downloadable_content_contains_podcasts = "podcasts" in self.response_content
+
+            if downloadable_content_contains_podcasts and self.is_running():
+                self.download_podcasts()
+            else:
+                self.log.error("API: No Podcast data was received from API response.")
+                self.connection_status.emit(
+                    {
+                        "status_label": {
+                            "text": "Keine Podcast Daten von API erhalten.",
+                            "color": "orange",
+                        },
+                        "download_label": {
+                            "text": f"{self.last_download_datetime_obj}"
+                        },
+                    }
+                )
+                self.response_content = {}
+
+    def download_podcasts(self):
+        try:
+            self.latest_file_dict = self.response_content["podcasts"][0]
+
+            available_podcast_datetime = datetime.strptime(
+                self.latest_file_dict["date"], self.datetime_format
+            )
+
+            is_downloaded_podcast_up_to_date = (
+                self.last_download_datetime_obj >= available_podcast_datetime
+            )
+
+            if not is_downloaded_podcast_up_to_date:
+                self.log.info("API: Download news file.")
+                self.download_podcast_file()
+            else:
+                self.connection_status.emit(
+                    {
+                        "status_label": {"text": "Programm läuft ohne Fehler."},
+                        "download_label": {
+                            "text": f"{self.last_download_datetime_obj}"
+                        },
+                    }
+                )
+        except IndexError:
+            self.log.info(
+                "API: No News data in received podcast data. Normal if it's after midnight."
+            )
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": "Keine News Daten verfügbar",
+                        "color": "orange",
+                    },
+                    "download_label": {"text": f"{self.last_download_datetime_obj}"},
+                }
+            )
+            self.response_content = {}
+
+    def download_podcast_file(self):
+        self.connection_status.emit(
+            {
+                "status_label": {"text": "Download Audiofile..."},
+                "download_label": {"text": f"{self.last_download_datetime_obj}"},
+            }
+        )
+        try:
+            self.download()
+            # Success !
+
+            self.connection_status.emit(
+                {
+                    "status_label": {"text": "Programm läuft ohne Fehler."},
+                    "download_label": {"text": f"{self.last_download_datetime_obj}"},
+                }
+            )
+        except RuntimeError:
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": f"Download Error. Neuversuch in {self.update_cycle}s",
+                        "color": "red",
+                    },
+                    "download_label": {"text": f"{self.last_download_datetime_obj}"},
+                }
+            )
+            self.response_content = {}
+        except Exception as ex:
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": "Ein unbekannter Fehler ist aufgetreten",
+                        "color": "red",
+                    },
+                    "download_label": {
+                        "text": "Bitte Log Datei überprüfen und Fehler melden."
+                    },
+                }
+            )
+            self.response_content = {}
+            self.error.emit(ex)
+
+    def fetch_api_data(self):
+        self.connection_status.emit(
+            {
+                "status_label": {"text": "News Daten werden angefordert..."},
+                "download_label": {"text": f"{self.last_download_datetime_obj}"},
+            }
+        )
+        try:
+            self.get_news_data()
+        except RuntimeError:
+            self.log.info("API: oAuth token not valid or expired.")
+            self.response_content = {}  # Empty response content to skip download
+            self.oauth_token = ""  # Empty token to force getting new token
+            self.force_update = True  # Force start the next cycle
+        except requests.exceptions.ConnectionError:
+            self.response_content = {}
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": f"Verbindungsfehler zu API Server. Neuversuch in {self.update_cycle}s",
+                        "color": "orange",
+                    },
+                    "download_label": {
+                        "text": "Gegebenfalls Konfiguration überprüfen."
+                    },
+                }
+            )
+        except Exception as ex:
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": "Ein unbekannter Fehler ist aufgetreten",
+                        "color": "red",
+                    },
+                    "download_label": {
+                        "text": "Bitte Log Datei überprüfen und Fehler melden."
+                    },
+                }
+            )
+            self.error.emit(ex)
+
+    def connect_to_api(self):
+        try:
+            self.connection_status.emit(
+                {
+                    "status_label": {"text": "API Token wird angefordert..."},
+                    "download_label": {"text": f"{self.last_download_datetime_obj}"},
+                }
+            )
+            self.log.debug("Getting new oAuth token.")
+            self.get_auth_token()
+            self.log.debug(f"Received new oAuth token: {self.oauth_token}")
+        except RuntimeError:
+            self.oauth_token = ""
+            self.running = False
+        except KeyError:
+            self.oauth_token = ""
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": "Warten auf oAuth Token.",
+                        "color": "orange",
+                    },
+                    "download_label": {"text": f"{self.last_download_datetime_obj}"},
+                }
+            )
+        except requests.exceptions.ConnectTimeout:
+            self.oauth_token = ""
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": f"Verbindungsfehler zu oAuth Server. Neuversuch in {self.update_cycle}s",
+                        "color": "orange",
+                    },
+                    "download_label": {
+                        "text": "Gegebenfalls Konfiguration überprüfen."
+                    },
+                }
+            )
+        except Exception as ex:
+            self.oauth_token = ""
+            self.connection_status.emit(
+                {
+                    "status_label": {
+                        "text": "Ein unbekannter Fehler ist aufgetreten",
+                        "color": "red",
+                    },
+                    "download_label": {
+                        "text": "Bitte Log Datei überprüfen und Fehler melden."
+                    },
+                }
+            )
+            self.error.emit(ex)
+
+    def validate_configuration(self):
         try:
             self.connection_status.emit(
                 {
@@ -283,247 +536,6 @@ class APIWorker(QObject):
         except Exception as ex:
             self.error.emit(ex)
             self.running = False  # Kill worker in case of an error
-
-        while self.running:
-            if force_update:
-                api_update_count = (
-                    self.update_cycle
-                )  # Update the count to force start the cycle
-                force_update = False
-
-            if api_update_count >= self.update_cycle and self.running:
-                self.log.debug("New cycle in worker routine starts.")
-
-                # oAuth Routine, run when we have no token
-                if not self.oauth_token:
-                    try:
-                        self.connection_status.emit(
-                            {
-                                "status_label": {
-                                    "text": "API Token wird angefordert..."
-                                },
-                                "download_label": {
-                                    "text": f"{self.last_download_datetime_obj}"
-                                },
-                            }
-                        )
-                        self.log.debug("Getting new oAuth token.")
-                        self.get_auth_token()
-                        self.log.debug(f"Received new oAuth token: {self.oauth_token}")
-                    except RuntimeError:
-                        self.oauth_token = ""
-                        self.running = False
-                    except KeyError:
-                        self.oauth_token = ""
-                        self.connection_status.emit(
-                            {
-                                "status_label": {
-                                    "text": "Warten auf oAuth Token.",
-                                    "color": "orange",
-                                },
-                                "download_label": {
-                                    "text": f"{self.last_download_datetime_obj}"
-                                },
-                            }
-                        )
-                    except requests.exceptions.ConnectTimeout:
-                        self.oauth_token = ""
-                        self.connection_status.emit(
-                            {
-                                "status_label": {
-                                    "text": f"Verbindungsfehler zu oAuth Server. Neuversuch in {self.update_cycle}s",
-                                    "color": "orange",
-                                },
-                                "download_label": {
-                                    "text": "Gegebenfalls Konfiguration überprüfen."
-                                },
-                            }
-                        )
-                    except Exception as ex:
-                        self.oauth_token = ""
-                        self.connection_status.emit(
-                            {
-                                "status_label": {
-                                    "text": "Ein unbekannter Fehler ist aufgetreten",
-                                    "color": "red",
-                                },
-                                "download_label": {
-                                    "text": "Bitte Log Datei überprüfen und Fehler melden."
-                                },
-                            }
-                        )
-                        self.error.emit(ex)
-
-                # News Fetch routine, run when we have oAuth token
-                if self.oauth_token and self.running:
-                    self.log.debug("API: Fetching news data.")
-                    self.connection_status.emit(
-                        {
-                            "status_label": {
-                                "text": "News Daten werden angefordert..."
-                            },
-                            "download_label": {
-                                "text": f"{self.last_download_datetime_obj}"
-                            },
-                        }
-                    )
-                    try:
-                        self.get_news_data()
-                    except RuntimeError:
-                        self.log.info("API: oAuth token not valid or expired.")
-                        self.response_content = {}  # Empty response content to skip download
-                        self.oauth_token = ""  # Empty token to force getting new token
-                        force_update = True  # Force start the next cycle
-                    except requests.exceptions.ConnectionError:
-                        self.response_content = {}
-                        self.connection_status.emit(
-                            {
-                                "status_label": {
-                                    "text": f"Verbindungsfehler zu API Server. Neuversuch in {self.update_cycle}s",
-                                    "color": "orange",
-                                },
-                                "download_label": {
-                                    "text": "Gegebenfalls Konfiguration überprüfen."
-                                },
-                            }
-                        )
-                    except Exception as ex:
-                        self.connection_status.emit(
-                            {
-                                "status_label": {
-                                    "text": "Ein unbekannter Fehler ist aufgetreten",
-                                    "color": "red",
-                                },
-                                "download_label": {
-                                    "text": "Bitte Log Datei überprüfen und Fehler melden."
-                                },
-                            }
-                        )
-                        self.error.emit(ex)
-
-                # Download routine, run when we have new content from news fetch
-                if self.response_content:
-                    # Content check before Download
-                    if "podcasts" in self.response_content and self.running:
-                        try:
-                            self.latest_file_dict = self.response_content["podcasts"][0]
-                            if (
-                                datetime.strptime(
-                                    self.latest_file_dict["date"], self.datetime_format
-                                )
-                                > self.last_download_datetime_obj
-                            ):
-                                self.log.info("API: Download news file.")
-                                self.connection_status.emit(
-                                    {
-                                        "status_label": {
-                                            "text": "Download Audiofile..."
-                                        },
-                                        "download_label": {
-                                            "text": f"{self.last_download_datetime_obj}"
-                                        },
-                                    }
-                                )
-                                try:
-                                    self.download()
-                                    # Success !
-                                    self.connection_status.emit(
-                                        {
-                                            "status_label": {
-                                                "text": "Programm läuft ohne Fehler."
-                                            },
-                                            "download_label": {
-                                                "text": f"{self.last_download_datetime_obj}"
-                                            },
-                                        }
-                                    )
-                                except RuntimeError:
-                                    self.connection_status.emit(
-                                        {
-                                            "status_label": {
-                                                "text": f"Download Error. Neuversuch in {self.update_cycle}s",
-                                                "color": "red",
-                                            },
-                                            "download_label": {
-                                                "text": f"{self.last_download_datetime_obj}"
-                                            },
-                                        }
-                                    )
-                                    self.response_content = {}
-                                except Exception as ex:
-                                    self.connection_status.emit(
-                                        {
-                                            "status_label": {
-                                                "text": "Ein unbekannter Fehler ist aufgetreten",
-                                                "color": "red",
-                                            },
-                                            "download_label": {
-                                                "text": "Bitte Log Datei überprüfen und Fehler melden."
-                                            },
-                                        }
-                                    )
-                                    self.response_content = {}
-                                    self.error.emit(ex)
-                            else:
-                                self.connection_status.emit(
-                                    {
-                                        "status_label": {
-                                            "text": "Programm läuft ohne Fehler."
-                                        },
-                                        "download_label": {
-                                            "text": f"{self.last_download_datetime_obj}"
-                                        },
-                                    }
-                                )
-                        except IndexError:
-                            self.log.info(
-                                "API: No News data in received podcast data. Normal if it's after midnight."
-                            )
-                            self.connection_status.emit(
-                                {
-                                    "status_label": {
-                                        "text": "Keine News Daten verfügbar",
-                                        "color": "orange",
-                                    },
-                                    "download_label": {
-                                        "text": f"{self.last_download_datetime_obj}"
-                                    },
-                                }
-                            )
-                            self.response_content = {}
-                    else:
-                        self.log.error(
-                            "API: No Podcast data was received from API response."
-                        )
-                        self.connection_status.emit(
-                            {
-                                "status_label": {
-                                    "text": "Keine Podcast Daten von API erhalten.",
-                                    "color": "orange",
-                                },
-                                "download_label": {
-                                    "text": f"{self.last_download_datetime_obj}"
-                                },
-                            }
-                        )
-                        self.response_content = {}
-
-                api_update_count = 0
-
-            if self.running:
-                api_update_count += 1
-                time.sleep(1)
-
-        self.log.info("API Worker finished work.")
-        self.connection_status.emit(
-            {
-                "status_label": {"text": "API Worker stopped.", "color": "red"},
-                "download_label": {
-                    "text": "Konfiguration öffnen und speichern für neustart.",
-                    "color": "red",
-                },
-            }
-        )
 
     def stop(self):
         self.running = False
