@@ -4,6 +4,7 @@ test/
 work_env/
 output_log*.txt
 news.mp3
+.ruff_cache/
 
 # Template:
 
