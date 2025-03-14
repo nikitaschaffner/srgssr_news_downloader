@@ -1,5 +1,6 @@
 # Custom
 config.ini
+config_test.ini
 test/
 work_env/
 output_log*.txt
