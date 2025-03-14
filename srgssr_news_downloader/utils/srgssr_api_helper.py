@@ -32,7 +32,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
     error (object): Exception Object, only called in uncaught exceptions
     """
 
-    def __init__(self, config_helper:ConfigHelper ):
+    def __init__(self, config_helper:ConfigHelper):
         super().__init__()
 
         self.log = logging.getLogger("news_downloader")
@@ -52,7 +52,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
         self.filename: str
         self.savepath: str
 
-        self.response_content = {}
+        self.response_content: dict
 
         self.datetime_format = "%Y-%m-%dT%H:%M:%S%z"
         self.last_download_datetime_obj = datetime.strptime(
@@ -65,7 +65,6 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
             pass
 
         self.running = True
-        self.config_helper = config_helper
 
     def populate_config_data(self):
         config_get = self.config_helper.get_value
@@ -247,12 +246,12 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
             self.last_download_datetime_obj = datetime.strptime(
                 self.latest_file_dict["date"], self.datetime_format
             )
-            self.response_content = {}
+            self.response_content = None
 
     def run(self):
         api_update_count: int = 0
         self.force_update = True
-        self.oauth_token = ""
+        self.oauth_token = None
 
         self.validate_configuration()
 
@@ -309,7 +308,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
             downloadable_content_contains_podcasts = "podcasts" in self.response_content
 
             if downloadable_content_contains_podcasts and self.is_running():
-                self.download_podcasts()
+                self.download_podcast()
             else:
                 self.log.error("API: No Podcast data was received from API response.")
                 self.connection_status.emit(
@@ -323,9 +322,9 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
                         },
                     }
                 )
-                self.response_content = {}
+                self.response_content = None
 
-    def download_podcasts(self):
+    def download_podcast(self):
         try:
             self.latest_file_dict = self.response_content["podcasts"][0]
 
@@ -362,7 +361,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
                     "download_label": {"text": f"{self.last_download_datetime_obj}"},
                 }
             )
-            self.response_content = {}
+            self.response_content = None
 
     def download_podcast_file(self):
         self.connection_status.emit(
@@ -391,7 +390,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
                     "download_label": {"text": f"{self.last_download_datetime_obj}"},
                 }
             )
-            self.response_content = {}
+            self.response_content = None
         except Exception as ex:
             self.connection_status.emit(
                 {
@@ -404,7 +403,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
                     },
                 }
             )
-            self.response_content = {}
+            self.response_content = None
             self.error.emit(ex)
 
     def fetch_api_data(self):
@@ -418,11 +417,11 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
             self.get_news_data()
         except RuntimeError:
             self.log.info("API: oAuth token not valid or expired.")
-            self.response_content = {}  # Empty response content to skip download
-            self.oauth_token = ""  # Empty token to force getting new token
+            self.response_content = None  # Empty response content to skip download
+            self.oauth_token = None  # Empty token to force getting new token
             self.force_update = True  # Force start the next cycle
         except requests.exceptions.ConnectionError:
-            self.response_content = {}
+            self.response_content = None
             self.connection_status.emit(
                 {
                     "status_label": {
@@ -460,10 +459,10 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
             self.get_auth_token()
             self.log.debug(f"Received new oAuth token: {self.oauth_token}")
         except RuntimeError:
-            self.oauth_token = ""
+            self.oauth_token = None
             self.running = False
         except KeyError:
-            self.oauth_token = ""
+            self.oauth_token = None
             self.connection_status.emit(
                 {
                     "status_label": {
@@ -474,7 +473,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
                 }
             )
         except requests.exceptions.ConnectTimeout:
-            self.oauth_token = ""
+            self.oauth_token = None
             self.connection_status.emit(
                 {
                     "status_label": {
@@ -487,7 +486,7 @@ class APIWorker(QObject):  # QObject allows integration with the UI.
                 }
             )
         except Exception as ex:
-            self.oauth_token = ""
+            self.oauth_token = None
             self.connection_status.emit(
                 {
                     "status_label": {
