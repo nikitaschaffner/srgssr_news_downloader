@@ -1,6 +1,6 @@
 [project]
 name = "srgssr_news_downloader"
-version = "101.0.0rc1"
+version = "101.0.0rc3"
 description = "SRGSSR News Downloader by Nikita Schaffner for Radio4TNG"
 authors = [
     {name = "Nikita SCHAFFNER", email = "dev@schaffnern.ch"},
