@@ -11,7 +11,9 @@ def setup_logger() -> object:
     """
     logger = logging.getLogger("news_downloader")
     fh = logging.handlers.TimedRotatingFileHandler(
-        filename="output_log.txt", backupCount=7, when="midnight"
+        filename    =   "output_log.txt", 
+        backupCount =   7, 
+        when        =   "midnight"
     )
     ch = logging.StreamHandler()  # For console logging
 
