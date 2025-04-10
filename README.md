@@ -14,7 +14,7 @@ Currently the tool requires a python installation on your windows computer.
 1. Install Python 3.13 on your computer directly via the Microsoft Appstore: https://apps.microsoft.com/detail/9pnrbtzxmb4z
 Restart your machine after installation. 
 
-2. Download the latest version from here: https://github.com/nikitaschaffner/srgssr_news_downloader/releases/download/v101.0.0/srgssr_news_downloader_101.0.0.zip
+2. Download the latest version from here (.zip file): https://github.com/nikitaschaffner/srgssr_news_downloader/releases/latest
 
 3. Extract the .zip folder. Optionally copy the complete folder to where you want it to stay on your machine.
 
