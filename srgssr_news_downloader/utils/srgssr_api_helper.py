@@ -219,6 +219,9 @@ class APIWorker(QObject):
         self.log.debug(self.response_content)
 
     def download(self):
+        if "podcastHdUrl" not in self.latest_file_dict:
+            raise KeyError()
+        
         mp3 = requests.get(self.latest_file_dict["podcastHdUrl"], stream=True)
 
         if not mp3.status_code == 200:
@@ -443,6 +446,19 @@ class APIWorker(QObject):
                                             "status_label": {
                                                 "text": f"Download Error. Neuversuch in {self.update_cycle}s",
                                                 "color": "red",
+                                            },
+                                            "download_label": {
+                                                "text": f"{self.last_download_datetime_obj}"
+                                            },
+                                        }
+                                    )
+                                    self.response_content = {}
+                                except KeyError:
+                                    self.connection_status.emit(
+                                        {
+                                            "status_label": {
+                                                "text": "Download Error. API Daten enthalten keine Download URL.",
+                                                "color": "orange",
                                             },
                                             "download_label": {
                                                 "text": f"{self.last_download_datetime_obj}"
