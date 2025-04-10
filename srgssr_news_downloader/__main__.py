@@ -138,7 +138,7 @@ class Window(QtWidgets.QMainWindow):
             value (_type_): Exception Object
         """
         self.log.critical(value)
-        self.log.critical(value.__traceback__)
+        self.log.exception(value)
         ErrorDialog(value, self)
 
     ## Functions
